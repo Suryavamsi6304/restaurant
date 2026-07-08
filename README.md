@@ -22,7 +22,7 @@ This repository now contains a working full-stack starter for the restaurant dig
 ### Backend
 
 ```bash
-cd /home/runner/work/restaurant/restaurant/backend
+cd backend
 python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
@@ -33,12 +33,12 @@ uvicorn app.main:app --reload
 ### Frontend
 
 ```bash
-cd /home/runner/work/restaurant/restaurant/frontend
+cd frontend
 npm install
 npm run dev
 ```
 
-Copy `/home/runner/work/restaurant/restaurant/.env.example` to `.env` if you want to override defaults, especially the backend secret key for non-demo environments.
+Copy `.env.example` to `.env` if you want to override defaults, especially the backend secret key for non-demo environments.
 
 ## Seeded credentials
 
