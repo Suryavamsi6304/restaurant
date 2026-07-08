@@ -1,3 +1,60 @@
+# Restaurant Menu Management System
+
+This repository now contains a working full-stack starter for the restaurant digital menu platform described below.
+
+## Stack choice
+
+- **Backend:** Python + FastAPI + SQLModel + JWT auth + OTP demo flow
+- **Frontend:** React + Vite + TypeScript for a fast, mobile-first dashboard experience
+- **Database:** SQLite for local development (easy to swap to PostgreSQL via `BACKEND_DATABASE_URL`)
+
+## Implemented modules
+
+- Admin dashboard for chef/waitress provisioning, table management, occupancy monitoring, and audit visibility
+- Chef dashboard for menu CRUD and availability control
+- Waitress dashboard for assisted customer seating and offboarding
+- Customer QR + OTP flow that unlocks the currently available menu with veg/non-veg filters
+- Seed data for sample users, tables, categories, and menu items
+- OpenAPI docs from FastAPI at `/docs`
+
+## Run locally
+
+### Backend
+
+```bash
+cd /home/runner/work/restaurant/restaurant/backend
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+python -m app.seed
+uvicorn app.main:app --reload
+```
+
+### Frontend
+
+```bash
+cd /home/runner/work/restaurant/restaurant/frontend
+npm install
+npm run dev
+```
+
+Copy `/home/runner/work/restaurant/restaurant/.env.example` to `.env` if you want to override defaults.
+
+## Seeded credentials
+
+- `admin / Admin@123`
+- `chef1 / Password@123`
+- `waitress1 / Password@123`
+
+## Architecture summary
+
+- Customers resolve a table from a QR payload, request an OTP, verify it, and receive a customer JWT.
+- Chef and admin users manage menu data; waitress and admin users control occupancy.
+- Every privileged action writes an audit record for traceability.
+- FastAPI publishes the REST API and OpenAPI contract under `/api/v1`.
+
+## Original build prompt
+
 # Restaurant Menu System — Detailed Execution Prompt
 
 You are a senior full-stack architect and lead developer.  
@@ -43,8 +100,6 @@ Implement **4 roles**:
 ---
 
 ## 3) Core Functional Requirements
-
-## 3.1 Authentication & Authorization
 - JWT-based auth (access + refresh tokens) or secure server sessions.
 - OTP flow for customer:
   - Request OTP with mobile number.
@@ -149,9 +204,6 @@ Design normalized schema with constraints:
 - `audit_logs`
   - id, actor_type(user/customer/system), actor_id, action, entity_type, entity_id, metadata, created_at
 
-Add indexes on:
-- mobile_number, table_number, qr_code_value, active table sessions, menu availability.
-
 ---
 
 ## 7) API Contract (High-Level)
@@ -191,119 +243,3 @@ Create REST APIs with OpenAPI docs.
 - `PUT /api/v1/admin/tables/:id`
 - `POST /api/v1/admin/tables/:id/regenerate-qr`
 - `GET /api/v1/admin/tables`
-
----
-
-## 8) Critical Business Rules
-
-1. Customer can access menu only after successful OTP verification.
-2. Table assignment requires valid QR context or waitress registration.
-3. Only one active customer session per table (unless override policy enabled).
-4. Chef controls menu availability; unavailable items never shown to customer.
-5. Waitress can offboard customer and close session; closure frees table immediately.
-6. Admin can perform all actions, including emergency overrides.
-7. All privileged actions must be audit logged.
-
----
-
-## 9) Security Requirements
-
-- Passwords hashed with bcrypt/argon2.
-- OTP expiration (e.g., 2–5 min), retry limits, resend cooldown.
-- Rate limits per IP + mobile for OTP endpoints.
-- JWT expiration + refresh rotation.
-- CSRF/XSS/CORS protections as applicable.
-- Encrypt sensitive data at rest where needed.
-- Avoid exposing internal IDs in QR payload without signing.
-
----
-
-## 10) UI/UX Modules
-
-- **Admin Dashboard**
-  - user management
-  - table management + QR generation
-  - menu supervision
-  - logs/reports
-- **Chef Dashboard**
-  - add/edit/delete items
-  - toggle availability quickly
-  - stock-aware status indicators
-- **Waitress Dashboard**
-  - live table occupancy board
-  - register customer to table
-  - offboard workflow
-  - view current menu
-- **Customer Web View (QR)**
-  - mobile login via OTP
-  - table confirmation
-  - menu list + veg/non-veg filters
-
----
-
-## 11) Edge Cases to Handle
-
-- OTP expired / invalid / too many attempts.
-- QR invalid or table inactive.
-- Table already occupied when customer verifies OTP.
-- Chef marks item unavailable while customer is browsing.
-- Waitress tries to offboard already closed session.
-- Network retries causing duplicate assignments (ensure idempotency keys or transactional locks).
-
----
-
-## 12) Testing Strategy
-
-- Unit tests for services/validators/guards.
-- Integration tests for auth, table assignment, RBAC, menu visibility.
-- E2E tests:
-  1. QR scan -> OTP -> table assignment -> menu view.
-  2. Chef toggles availability -> customer menu reflects instantly.
-  3. Waitress register + offboard lifecycle.
-  4. Admin creates chef/waitress and verifies access.
-- Security tests for auth and OTP abuse prevention.
-
----
-
-## 13) Delivery Plan (Milestones)
-
-1. Project setup + DB schema + auth scaffolding.
-2. Admin user management for chef/waitress.
-3. Customer OTP + QR table assignment.
-4. Chef menu CRUD + availability controls.
-5. Waitress occupancy/offboarding flows.
-6. Customer menu filters and UI polish.
-7. Audit logs, hardening, and test completion.
-8. Production deployment + runbook.
-
----
-
-## 14) Definition of Done
-
-The implementation is complete only when:
-
-- All role-based login mechanisms work as specified.
-- Admin-only creation of chef/waitress credentials is enforced.
-- Customer OTP auth and automatic table assignment works via QR flow.
-- Chef can control live menu availability.
-- Waitress can monitor occupancy, register, and offboard customers.
-- Customer sees only available menu with veg/non-veg filters.
-- Admin has full controls and audit visibility.
-- Test suite passes and API documentation is published.
-
----
-
-## 15) Output Requirements for the Implementer
-
-Produce:
-
-1. Architecture diagram (logical components + data flow)
-2. DB schema (ERD + SQL migrations)
-3. OpenAPI specification
-4. Backend implementation with RBAC and OTP workflows
-5. Frontend role-based dashboards/views
-6. Seed scripts (admin + sample tables/menu)
-7. Test reports (unit/integration/E2E)
-8. Deployment guide and `.env.example`
-9. Postman/Insomnia collection
-10. Operational runbook (monitoring, rollback, incident steps)
