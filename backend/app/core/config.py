@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     app_name: str = 'Restaurant Menu Management System'
     api_prefix: str = '/api/v1'
     database_url: str = 'sqlite:///./restaurant.db'
-    secret_key: str = 'change-me-in-production'
+    secret_key: str = 'change-me-in-production-please-use-a-32-char-secret'
     access_token_expire_minutes: int = 30
     refresh_token_expire_minutes: int = 60 * 24
     otp_expire_minutes: int = 5

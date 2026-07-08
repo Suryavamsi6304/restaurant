@@ -38,7 +38,7 @@ npm install
 npm run dev
 ```
 
-Copy `/home/runner/work/restaurant/restaurant/.env.example` to `.env` if you want to override defaults.
+Copy `/home/runner/work/restaurant/restaurant/.env.example` to `.env` if you want to override defaults, especially the backend secret key for non-demo environments.
 
 ## Seeded credentials
 

@@ -59,7 +59,7 @@ def client(tmp_path: Path):
 
 
 def auth_headers(token: str) -> dict[str, str]:
-    return {'Authorization': f'******'}
+    return {'Authorization': 'Bearer ' + token}
 
 
 def staff_login(client: TestClient, username: str, password: str) -> str:

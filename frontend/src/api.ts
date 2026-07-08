@@ -6,7 +6,7 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
   const headers = new Headers(options.headers ?? {})
   headers.set('Content-Type', 'application/json')
   if (options.token) {
-    headers.set('Authorization', `******
+    headers.set('Authorization', 'Bearer ' + options.token)
   }
 
   const response = await fetch(`${API_URL}${path}`, {
