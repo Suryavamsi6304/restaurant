@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react'
 import { BrowserRouter, Link, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom'
 import './App.css'
 import { apiRequest } from './api'
@@ -101,7 +101,7 @@ function App() {
   )
 }
 
-function Shell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+function Shell({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
     <main className="shell">
       <header className="hero-banner">
@@ -140,7 +140,7 @@ function HomePage() {
             <Link className="button primary" to="/staff/login">
               Staff login
             </Link>
-            <Link className="button secondary" to="/customer?qr=TABLE::T1::demo">
+            <Link className="button secondary" to="/customer">
               Customer QR flow
             </Link>
           </div>

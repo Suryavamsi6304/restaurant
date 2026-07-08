@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 
 from app.core.database import get_session
 from app.core.security import Principal, hash_password, require_roles
-from app.models import AuditLog, RestaurantTable, StaffRole, TableSession, User
+from app.models import AuditLog, Customer, RestaurantTable, StaffRole, TableSession, User
 from app.schemas import (
     AuditLogResponse,
     PasswordResetRequest,
@@ -184,7 +184,7 @@ def get_occupancy(
     sessions = session.exec(select(TableSession).order_by(TableSession.started_at.desc())).all()
     for table_session in sessions:
         table = session.get(RestaurantTable, table_session.table_id)
-        customer = session.get(__import__('app.models', fromlist=['Customer']).Customer, table_session.customer_id)
+        customer = session.get(Customer, table_session.customer_id)
         results.append(
             TableSessionResponse(
                 id=table_session.id,

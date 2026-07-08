@@ -2,11 +2,10 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.core.database import get_session
 from app.main import app
-from app.seed import seed_data
 
 
 @pytest.fixture()
@@ -38,7 +37,7 @@ def client(tmp_path: Path):
         session.add(chef)
         session.add(waitress)
         session.commit()
-        categories = {category.name: category for category in session.query(MenuCategory).all()}
+        categories = {category.name: category for category in session.exec(select(MenuCategory)).all()}
         table = RestaurantTable(table_number='T1', qr_code_value=generate_table_qr('T1'))
         item = MenuItem(
             name='Paneer Tikka',
@@ -59,6 +58,10 @@ def client(tmp_path: Path):
     app.dependency_overrides.clear()
 
 
+def auth_headers(token: str) -> dict[str, str]:
+    return {'Authorization': f'******'}
+
+
 def staff_login(client: TestClient, username: str, password: str) -> str:
     response = client.post('/api/v1/auth/login', json={'username': username, 'password': password})
     assert response.status_code == 200
@@ -67,7 +70,7 @@ def staff_login(client: TestClient, username: str, password: str) -> str:
 
 def test_admin_can_create_user_and_table(client: TestClient):
     token = staff_login(client, 'admin', 'Admin@123')
-    headers = {'Authorization': f'******'}
+    headers = auth_headers(token)
     create_user = client.post('/api/v1/admin/users', json={'role': 'CHEF', 'username': 'chef2', 'password': 'Password@123'}, headers=headers)
     assert create_user.status_code == 201
     create_table = client.post('/api/v1/admin/tables', json={'table_number': 'T2'}, headers=headers)
@@ -75,14 +78,17 @@ def test_admin_can_create_user_and_table(client: TestClient):
 
 
 def test_customer_qr_otp_menu_flow(client: TestClient):
-    resolve = client.get('/api/v1/customer/table/resolve', params={'qr': client.get('/api/v1/admin/tables', headers={'Authorization': f"****** 'admin', 'Admin@123')}"}).json()[0]['qr_code_value']})
+    admin_token = staff_login(client, 'admin', 'Admin@123')
+    tables = client.get('/api/v1/admin/tables', headers=auth_headers(admin_token))
+    qr_code = tables.json()[0]['qr_code_value']
+    resolve = client.get('/api/v1/customer/table/resolve', params={'qr': qr_code})
     assert resolve.status_code == 200
     request_otp = client.post('/api/v1/customer/auth/request-otp', json={'mobile_number': '9999999999'})
     assert request_otp.status_code == 200
     otp_code = request_otp.json()['otp_code']
     verify = client.post('/api/v1/customer/auth/verify-otp', json={'mobile_number': '9999999999', 'otp_code': otp_code, 'qr_code_value': resolve.json()['qr_code_value']})
     assert verify.status_code == 200
-    customer_headers = {'Authorization': f"******'access_token']}"}
+    customer_headers = auth_headers(verify.json()['access_token'])
     menu = client.get('/api/v1/customer/menu', headers=customer_headers)
     assert menu.status_code == 200
     assert menu.json()[0]['name'] == 'Paneer Tikka'
@@ -90,14 +96,16 @@ def test_customer_qr_otp_menu_flow(client: TestClient):
 
 def test_chef_can_toggle_availability_and_waitress_can_offboard(client: TestClient):
     chef_token = staff_login(client, 'chef1', 'Password@123')
-    chef_headers = {'Authorization': f'******'}
+    chef_headers = auth_headers(chef_token)
     menu_items = client.get('/api/v1/chef/menu-items', headers=chef_headers)
     item_id = menu_items.json()[0]['id']
     toggle = client.patch(f'/api/v1/chef/menu-items/{item_id}/availability', json={'is_available': False, 'stock_qty': 0}, headers=chef_headers)
     assert toggle.status_code == 200
+    assert toggle.json()['is_available'] is False
     waitress_token = staff_login(client, 'waitress1', 'Password@123')
-    waitress_headers = {'Authorization': f'******'}
-    tables = client.get('/api/v1/admin/tables', headers={'Authorization': f"****** 'admin', 'Admin@123')}"}).json()
+    waitress_headers = auth_headers(waitress_token)
+    admin_token = staff_login(client, 'admin', 'Admin@123')
+    tables = client.get('/api/v1/admin/tables', headers=auth_headers(admin_token)).json()
     register = client.post('/api/v1/waitress/table/register-customer', json={'table_id': tables[0]['id'], 'mobile_number': '8888888888'}, headers=waitress_headers)
     assert register.status_code == 201
     offboard = client.post('/api/v1/waitress/table/offboard', json={'table_session_id': register.json()['id']}, headers=waitress_headers)
