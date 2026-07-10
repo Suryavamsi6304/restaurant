@@ -1,11 +1,12 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import delete as sa_delete
 from sqlmodel import Session, select
 
 from app.core.database import get_session
 from app.core.security import Principal, hash_password, require_roles
-from app.models import AuditLog, Customer, RestaurantTable, StaffRole, TableSession, User
+from app.models import AuditLog, Customer, RestaurantTable, StaffRole, TableSession, TableSessionStatus, User
 from app.schemas import (
     AuditLogResponse,
     PasswordResetRequest,
@@ -173,6 +174,48 @@ def regenerate_qr(
     record_audit(session, 'USER', principal.user_id, 'admin.table_qr_regenerated', 'table', table.id, {'table_number': table.table_number})
     session.commit()
     return TableResponse(id=table.id, table_number=table.table_number, qr_code_value=table.qr_code_value, status=table.status)
+
+
+@router.delete('/tables/{table_id}', status_code=status.HTTP_204_NO_CONTENT)
+def delete_table(
+    table_id: int,
+    principal: Principal = Depends(require_roles(StaffRole.ADMIN)),
+    session: Session = Depends(get_session),
+) -> None:
+    table = session.get(RestaurantTable, table_id)
+    if table is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Table not found.')
+
+    active_session = session.exec(
+        select(TableSession).where(
+            TableSession.table_id == table_id,
+            TableSession.status == TableSessionStatus.ACTIVE,
+        )
+    ).first()
+    if active_session is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Cannot delete table with an active occupancy session.',
+        )
+
+    historical_sessions = session.exec(select(TableSession).where(TableSession.table_id == table_id)).all()
+    deleted_session_count = len(historical_sessions)
+    if deleted_session_count > 0:
+        session.exec(sa_delete(TableSession).where(TableSession.table_id == table_id))
+        session.flush()
+
+    table_number = table.table_number
+    session.delete(table)
+    record_audit(
+        session,
+        'USER',
+        principal.user_id,
+        'admin.table_deleted',
+        'table',
+        table_id,
+        {'table_number': table_number, 'deleted_table_sessions': deleted_session_count},
+    )
+    session.commit()
 
 
 @router.get('/occupancy', response_model=list[TableSessionResponse])

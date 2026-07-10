@@ -2,6 +2,16 @@ const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 export type ApiOptions = RequestInit & { token?: string }
 
+export class ApiError extends Error {
+  status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 export async function apiRequest<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers = new Headers(options.headers ?? {})
   headers.set('Content-Type', 'application/json')
@@ -22,7 +32,7 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
     } catch {
       // ignore json parse failure
     }
-    throw new Error(message)
+    throw new ApiError(response.status, message)
   }
 
   if (response.status === 204) {

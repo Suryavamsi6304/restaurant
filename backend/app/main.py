@@ -16,6 +16,7 @@ from sqlmodel import Session
 from app.core.database import engine
 
 settings = get_settings()
+cors_origins = [origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()]
 
 
 @asynccontextmanager
@@ -35,7 +36,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],

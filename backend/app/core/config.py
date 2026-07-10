@@ -1,11 +1,14 @@
 from functools import lru_cache
+from pathlib import Path
 
-from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix='BACKEND_', env_file='.env', extra='ignore')
+    model_config = SettingsConfigDict(env_prefix='BACKEND_', env_file=str(BASE_DIR / '.env'), extra='ignore')
 
     app_name: str = 'Restaurant Menu Management System'
     api_prefix: str = '/api/v1'
@@ -18,14 +21,7 @@ class Settings(BaseSettings):
     otp_max_attempts: int = 3
     allow_waitress_override: bool = True
     demo_otp_passthrough: bool = True
-    cors_origins: list[str] = ['http://localhost:5173']
-
-    @field_validator('cors_origins', mode='before')
-    @classmethod
-    def split_origins(cls, value: str | list[str]) -> list[str]:
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(',') if origin.strip()]
-        return value
+    cors_origins: str = 'http://localhost:5173'
 
 
 @lru_cache

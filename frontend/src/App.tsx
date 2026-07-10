@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { BrowserRouter, Link, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom'
 import './App.css'
-import { apiRequest } from './api'
+import { ApiError, apiRequest } from './api'
 
 type StaffRole = 'ADMIN' | 'CHEF' | 'WAITRESS'
 type Role = StaffRole | 'CUSTOMER'
@@ -73,18 +73,28 @@ type AuditLog = {
 const storageKey = 'restaurant-app-session'
 
 function useStoredSession() {
-  const [session, setSession] = useState<Tokens | null>(() => {
+  const [session, setSessionState] = useState<Tokens | null>(() => {
     const raw = window.localStorage.getItem(storageKey)
-    return raw ? (JSON.parse(raw) as Tokens) : null
+    if (!raw) {
+      return null
+    }
+
+    try {
+      return JSON.parse(raw) as Tokens
+    } catch {
+      window.localStorage.removeItem(storageKey)
+      return null
+    }
   })
 
-  useEffect(() => {
-    if (session) {
-      window.localStorage.setItem(storageKey, JSON.stringify(session))
+  function setSession(nextSession: Tokens | null) {
+    setSessionState(nextSession)
+    if (nextSession) {
+      window.localStorage.setItem(storageKey, JSON.stringify(nextSession))
     } else {
       window.localStorage.removeItem(storageKey)
     }
-  }, [session])
+  }
 
   return { session, setSession }
 }
@@ -208,6 +218,11 @@ function DashboardPage() {
   const navigate = useNavigate()
   const { session, setSession } = useStoredSession()
 
+  function handleUnauthorized() {
+    setSession(null)
+    navigate('/staff/login')
+  }
+
   useEffect(() => {
     if (!session || session.role === 'CUSTOMER') {
       navigate('/staff/login')
@@ -226,14 +241,14 @@ function DashboardPage() {
           Logout
         </button>
       </div>
-      {session.role === 'ADMIN' && <AdminDashboard token={session.access_token} />}
-      {session.role === 'CHEF' && <ChefDashboard token={session.access_token} />}
-      {session.role === 'WAITRESS' && <WaitressDashboard token={session.access_token} />}
+      {session.role === 'ADMIN' && <AdminDashboard token={session.access_token} onUnauthorized={handleUnauthorized} />}
+      {session.role === 'CHEF' && <ChefDashboard token={session.access_token} onUnauthorized={handleUnauthorized} />}
+      {session.role === 'WAITRESS' && <WaitressDashboard token={session.access_token} onUnauthorized={handleUnauthorized} />}
     </Shell>
   )
 }
 
-function AdminDashboard({ token }: { token: string }) {
+function AdminDashboard({ token, onUnauthorized }: { token: string; onUnauthorized: () => void }) {
   const [users, setUsers] = useState<User[]>([])
   const [tables, setTables] = useState<Table[]>([])
   const [logs, setLogs] = useState<AuditLog[]>([])
@@ -255,8 +270,16 @@ function AdminDashboard({ token }: { token: string }) {
     setOccupancy(occupancyResponse)
   }
 
+  function handleApiError(error: unknown) {
+    if (error instanceof ApiError && error.status === 401) {
+      onUnauthorized()
+      return
+    }
+    setMessage((error as Error).message)
+  }
+
   useEffect(() => {
-    loadData().catch((error) => setMessage(error.message))
+    loadData().catch(handleApiError)
   }, [])
 
   async function createUser(event: FormEvent) {
@@ -271,7 +294,7 @@ function AdminDashboard({ token }: { token: string }) {
       setMessage('Staff user created.')
       await loadData()
     } catch (error) {
-      setMessage((error as Error).message)
+      handleApiError(error)
     }
   }
 
@@ -287,7 +310,25 @@ function AdminDashboard({ token }: { token: string }) {
       setMessage('Table created.')
       await loadData()
     } catch (error) {
-      setMessage((error as Error).message)
+      handleApiError(error)
+    }
+  }
+
+  async function deleteTable(table: Table) {
+    const confirmed = window.confirm(`Delete table ${table.table_number}? This cannot be undone.`)
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await apiRequest<void>(`/api/v1/admin/tables/${table.id}`, {
+        method: 'DELETE',
+        token,
+      })
+      setMessage(`Table ${table.table_number} deleted.`)
+      await loadData()
+    } catch (error) {
+      handleApiError(error)
     }
   }
 
@@ -323,10 +364,17 @@ function AdminDashboard({ token }: { token: string }) {
         </form>
         <div className="table-wrapper">
           <table>
-            <thead><tr><th>Table</th><th>Status</th><th>QR payload</th></tr></thead>
+            <thead><tr><th>Table</th><th>Status</th><th>QR payload</th><th>Action</th></tr></thead>
             <tbody>
               {tables.map((table) => (
-                <tr key={table.id}><td>{table.table_number}</td><td>{table.status}</td><td className="mono">{table.qr_code_value}</td></tr>
+                <tr key={table.id}>
+                  <td>{table.table_number}</td>
+                  <td>{table.status}</td>
+                  <td className="mono">{table.qr_code_value}</td>
+                  <td>
+                    <button className="button secondary" onClick={() => deleteTable(table)}>Delete</button>
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>
@@ -358,7 +406,7 @@ function AdminDashboard({ token }: { token: string }) {
   )
 }
 
-function ChefDashboard({ token }: { token: string }) {
+function ChefDashboard({ token, onUnauthorized }: { token: string; onUnauthorized: () => void }) {
   const [items, setItems] = useState<MenuItem[]>([])
   const [categories, setCategories] = useState<MenuCategory[]>([])
   const [message, setMessage] = useState('')
@@ -373,8 +421,16 @@ function ChefDashboard({ token }: { token: string }) {
     setCategories(categoryResponse)
   }
 
+  function handleApiError(error: unknown) {
+    if (error instanceof ApiError && error.status === 401) {
+      onUnauthorized()
+      return
+    }
+    setMessage((error as Error).message)
+  }
+
   useEffect(() => {
-    loadData().catch((error) => setMessage(error.message))
+    loadData().catch(handleApiError)
   }, [])
 
   async function createItem(event: FormEvent) {
@@ -394,7 +450,7 @@ function ChefDashboard({ token }: { token: string }) {
       setMessage('Menu item created.')
       await loadData()
     } catch (error) {
-      setMessage((error as Error).message)
+      handleApiError(error)
     }
   }
 
@@ -410,7 +466,7 @@ function ChefDashboard({ token }: { token: string }) {
       })
       await loadData()
     } catch (error) {
-      setMessage((error as Error).message)
+      handleApiError(error)
     }
   }
 
@@ -458,7 +514,7 @@ function ChefDashboard({ token }: { token: string }) {
   )
 }
 
-function WaitressDashboard({ token }: { token: string }) {
+function WaitressDashboard({ token, onUnauthorized }: { token: string; onUnauthorized: () => void }) {
   const [tables, setTables] = useState<TableSession[]>([])
   const [menu, setMenu] = useState<MenuItem[]>([])
   const [message, setMessage] = useState('')
@@ -473,8 +529,16 @@ function WaitressDashboard({ token }: { token: string }) {
     setMenu(menuResponse)
   }
 
+  function handleApiError(error: unknown) {
+    if (error instanceof ApiError && error.status === 401) {
+      onUnauthorized()
+      return
+    }
+    setMessage((error as Error).message)
+  }
+
   useEffect(() => {
-    loadData().catch((error) => setMessage(error.message))
+    loadData().catch(handleApiError)
   }, [])
 
   async function registerCustomer(event: FormEvent) {
@@ -493,7 +557,7 @@ function WaitressDashboard({ token }: { token: string }) {
       setMessage('Customer registered to table.')
       await loadData()
     } catch (error) {
-      setMessage((error as Error).message)
+      handleApiError(error)
     }
   }
 
@@ -506,7 +570,7 @@ function WaitressDashboard({ token }: { token: string }) {
       })
       await loadData()
     } catch (error) {
-      setMessage((error as Error).message)
+      handleApiError(error)
     }
   }
 
@@ -587,7 +651,14 @@ function CustomerPage() {
       const suffix = foodType ? `&foodType=${foodType}` : ''
       apiRequest<MenuItem[]>(`/api/v1/customer/menu?available=true${suffix}`, { token: session.access_token })
         .then(setMenu)
-        .catch((error) => setMessage(error.message))
+        .catch((error) => {
+          if (error instanceof ApiError && error.status === 401) {
+            setSession(null)
+            setMessage('Session expired. Please verify OTP again.')
+            return
+          }
+          setMessage((error as Error).message)
+        })
     }
   }, [session, foodType])
 
